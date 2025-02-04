@@ -3,61 +3,140 @@ from scipy.optimize import minimize
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.animation import FuncAnimation
-import ctypes
-from ctypes import c_double, POINTER
-
-# Load C library
-libenergy = ctypes.CDLL('./libenergy.so')  # Ensure this is compiled correctly
-
-# Set argument and return types for C function
-libenergy.total_energy.argtypes = [POINTER(c_double), ctypes.c_int, c_double, c_double, c_double, c_double]
-libenergy.total_energy.restype = c_double
 
 # Initialize protein positions
-def initialize_protein(n_beads, dimension=3, fudge=1e-5):
+def initialize_protein(n_beads, dimension=3, fudge = 1e-5):
+    """
+    Initialize a protein with `n_beads` arranged almost linearly in `dimension`-dimensional space.
+    The `fudge` is a factor that, if non-zero, adds a spiral structure to the configuration.
+    """
     positions = np.zeros((n_beads, dimension))
     for i in range(1, n_beads):
         positions[i, 0] = positions[i-1, 0] + 1  # Fixed bond length of 1 unit
-        positions[i, 1] = fudge * np.sin(i)
-        positions[i, 2] = fudge * np.sin(i*i)
+        positions[i, 1] = fudge * np.sin(i)  # Fixed bond length of 1 unit
+        positions[i, 2] = fudge * np.sin(i*i)  # Fixed bond length of 1 unit                
     return positions
 
-# Total energy function using C-optimized energy calculation
+# Lennard-Jones potential function
+def lennard_jones_potential(r, epsilon=1.0, sigma=1.0):
+    """
+    Compute Lennard-Jones potential between two beads.
+    """
+    return 4 * epsilon * ((sigma / r)**12 - (sigma / r)**6)
+
+# Bond potential function
+def bond_potential(r, b=1.0, k_b=100.0):
+    """
+    Compute harmonic bond potential between two bonded beads.
+    """
+    return k_b * (r - b)**2
+
+# Total energy function
 def total_energy(positions, n_beads, epsilon=1.0, sigma=1.0, b=1.0, k_b=100.0):
-    positions_flat = positions.flatten()
-    energy = libenergy.total_energy(
-        (c_double * len(positions_flat))(*positions_flat), n_beads, epsilon, sigma, b, k_b
-    )
+    """
+    Compute the total energy of the protein conformation.
+    """
+    positions = positions.reshape((n_beads, -1))
+    energy = 0.0
+
+    # Bond energy
+    for i in range(n_beads - 1):
+        r = np.linalg.norm(positions[i+1] - positions[i])
+        energy += bond_potential(r, b, k_b)
+
+    # Lennard-Jones potential for non-bonded interactions
+    for i in range(n_beads):
+        for j in range(i+1, n_beads):
+            r = np.linalg.norm(positions[i] - positions[j])
+            if r > 1e-2:  # Avoid division by zero
+                energy += lennard_jones_potential(r, epsilon, sigma)
+
     return energy
 
-# Optimization function
+# Gradient of the total energy function
+def energy_gradient(positions, n_beads, epsilon=1.0, sigma=1.0, b=1.0, k_b=100.0):
+    """
+    Compute the gradient (first derivative) of the total energy w.r.t positions.
+    """
+    positions = positions.reshape((n_beads, -1))
+    grad = np.zeros_like(positions)
+
+    # Bond gradient
+    for i in range(n_beads - 1):
+        r_vec = positions[i+1] - positions[i]
+        r = np.linalg.norm(r_vec)
+        grad[i] += 2 * k_b * (r - b) * r_vec / r
+        grad[i+1] -= 2 * k_b * (r - b) * r_vec / r
+
+    # Lennard-Jones gradient
+    for i in range(n_beads):
+        for j in range(i+1, n_beads):
+            r_vec = positions[j] - positions[i]
+            r = np.linalg.norm(r_vec)
+            if r > 1e-2:  # Avoid division by zero
+                lj_grad = 4 * epsilon * (12 * (sigma/r)**13 - 6 * (sigma/r)**7) * r_vec / r
+                grad[i] += lj_grad
+                grad[j] -= lj_grad
+
+    return grad.flatten()
+
+# Custom BFGS optimization function
+def bfgs(positions, n_beads, maxiter=1000, tol=1e-6, epsilon=1.0, sigma=1.0, b=1.0, k_b=100.0):
+    """
+    Perform BFGS optimization on the protein's bead positions to minimize energy.
+    """
+    positions = positions.flatten()
+    inverse_hessian = np.eye(len(positions))  # Initial guess: identity matrix
+    gradient = energy_gradient(positions, n_beads, epsilon, sigma, b, k_b)
+    
+    trajectory = [positions.copy()]
+    
+    for iteration in range(maxiter):
+        if np.linalg.norm(gradient) < tol:
+            print(f"Converged in {iteration} iterations.")
+            break
+        
+        # Compute step direction
+        step = -np.dot(inverse_hessian, gradient)
+        
+        # Update positions
+        new_positions = positions + step
+        new_gradient = energy_gradient(new_positions, n_beads, epsilon, sigma, b, k_b)
+        
+        # Compute the change in gradient and position
+        s = new_positions - positions
+        y = new_gradient - gradient
+        
+        # Update inverse Hessian approximation using BFGS formula
+        rho = 1.0 / np.dot(y, s)
+        I = np.eye(len(positions))
+        inverse_hessian = np.dot(I - rho * np.outer(s, y), np.dot(inverse_hessian, I - rho * np.outer(y, s))) + rho * np.outer(s, s)
+        
+        # Update positions and gradient for the next iteration
+        positions = new_positions
+        gradient = new_gradient
+        
+        trajectory.append(positions.copy())
+        
+    return positions, trajectory
+
+# Optimization function wrapper
 def optimize_protein(positions, n_beads, write_csv=False, maxiter=1000, tol=1e-6):
-    trajectory = []
-
-    def callback(x):
-        trajectory.append(x.reshape((n_beads, -1)))
-        if len(trajectory) % 20 == 0:
-            print(len(trajectory))
-
-    result = minimize(
-        fun=total_energy,
-        x0=positions.flatten(),
-        args=(n_beads,),
-        method='BFGS',
-        callback=callback,
-        tol=tol,
-        options={'maxiter': maxiter, 'disp': True}
-    )
+    """
+    Optimize the positions of the protein to minimize total energy.
+    """
+    result, trajectory = bfgs(positions, n_beads, maxiter=maxiter, tol=tol)
     
     if write_csv:
-        csv_filepath = f'protein{n_beads}.csv'
-        print(f'Writing data to file {csv_filepath}')
-        np.savetxt(csv_filepath, trajectory[-1], delimiter=",")
-
+        np.savetxt(f'protein{n_beads}.csv', result.reshape((n_beads, 3)), delimiter=",")
+    
     return result, trajectory
 
 # 3D visualization function
 def plot_protein_3d(positions, title="Protein Conformation", ax=None):
+    """
+    Plot the 3D positions of the protein.
+    """
     if ax is None:
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
@@ -69,8 +148,12 @@ def plot_protein_3d(positions, title="Protein Conformation", ax=None):
     ax.set_zlabel('z')
     plt.show()
 
+# Animation function
 # Animation function with autoscaling
 def animate_optimization(trajectory, interval=100):
+    """
+    Animate the protein folding process in 3D with autoscaling.
+    """
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
@@ -109,7 +192,7 @@ if __name__ == "__main__":
 
     result, trajectory = optimize_protein(initial_positions, n_beads, write_csv=True)
 
-    optimized_positions = result.x.reshape((n_beads, dimension))
+    optimized_positions = result.reshape((n_beads, dimension))
     print("Optimized Energy:", total_energy(optimized_positions.flatten(), n_beads))
     plot_protein_3d(optimized_positions, title="Optimized Configuration")
 
