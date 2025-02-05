@@ -37,7 +37,7 @@ def total_energy(positions, n_beads, epsilon=1.0, sigma=1.0, b=1.0, k_b=100.0):
     """
     Compute the total energy of the protein conformation.
     """
-    positions = positions.reshape((n_beads, -1))
+    positions = positions.reshape((n_beads, -1))  # Ensure positions are reshaped correctly
     energy = 0.0
 
     # Bond energy
@@ -55,43 +55,14 @@ def total_energy(positions, n_beads, epsilon=1.0, sigma=1.0, b=1.0, k_b=100.0):
     return energy
 
 # Optimization function
-# def optimize_protein(positions, n_beads, write_csv=False, maxiter=1000, tol=1e-6):
+def optimize_protein(positions, n_beads, write_csv=False, maxiter=1000, tol=1e-6):
     """
-    Optimize the positions of the protein to minimize total energy.
-
-    Parameters:
-    ----------
-    positions : np.ndarray
-        A 2D NumPy array of shape (n_beads, d) representing the initial
-        positions of the protein's beads in d-dimensional space.
-
-    n_beads : int
-        The number of beads (or units) in the protein model.
-
-    write_csv : bool, optional (default=False)
-        If True, the final optimized positions are saved to a CSV file.
-
-    maxiter : int, optional (default=1000)
-        The maximum number of iterations for the BFGS optimization algorithm.
-
-    tol : float, optional (default=1e-6)
-        The tolerance level for convergence in the optimization.
-
-    Returns:
-    -------
-    result : scipy.optimize.OptimizeResult
-        The result of the optimization process, containing information
-        such as the optimized positions and convergence status.
-
-    trajectory : list of np.ndarray
-        A list of intermediate configurations during the optimization,
-        where each element is an (n_beads, d) array representing the
-        positions of the beads at that step.
+    Optimize the positions of the protein to minimize total energy using BFGS algorithm.
     """
     trajectory = []
 
     def callback(x):
-        trajectory.append(x.reshape((n_beads, -1)))
+        trajectory.append(x.reshape((n_beads, -1)))  # Reshape positions to (n_beads, -1) in the trajectory
         if len(trajectory) % 20 == 0:
             print(len(trajectory))
 
@@ -104,6 +75,7 @@ def total_energy(positions, n_beads, epsilon=1.0, sigma=1.0, b=1.0, k_b=100.0):
         tol=tol,
         options={'maxiter': maxiter, 'disp': True}
     )
+
     if write_csv:
         csv_filepath = f'protein{n_beads}.csv'
         print(f'Writing data to file {csv_filepath}')
@@ -111,149 +83,77 @@ def total_energy(positions, n_beads, epsilon=1.0, sigma=1.0, b=1.0, k_b=100.0):
 
     return result, trajectory
 
-def optimize_protein(positions, n_beads, write_csv=False, maxiter=1000, tol=1e-6):
-    """
-    Optimize the positions of the protein to minimize total energy using BFGS algorithm.
+# Helper function to compute gradient of total energy
+def compute_gradient(positions, n_beads, epsilon=1.0, sigma=1.0, b=1.0, k_b=100.0):
+    gradient = np.zeros_like(positions)
+    positions = positions.reshape((n_beads, -1))
     
-    Parameters:
-    ----------
-    positions : np.ndarray
-        A 2D NumPy array of shape (n_beads, d) representing the initial
-        positions of the protein's beads in d-dimensional space.
+    # Bond energy gradient
+    for i in range(n_beads - 1):
+        r_vec = positions[i+1] - positions[i]
+        r = np.linalg.norm(r_vec)
+        grad = 2 * k_b * (r - b) * r_vec / r
+        gradient[i] += grad
+        gradient[i+1] -= grad
     
-    n_beads : int
-        The number of beads (or units) in the protein model.
-    
-    write_csv : bool, optional (default=False)
-        If True, the final optimized positions are saved to a CSV file.
-    
-    maxiter : int, optional (default=1000)
-        The maximum number of iterations for the BFGS optimization algorithm.
-    
-    tol : float, optional (default=1e-6)
-        The tolerance level for convergence in the optimization.
-    
-    Returns:
-    -------
-    result_positions : np.ndarray
-        The final optimized positions of the protein's beads.
-    
-    final_energy : float
-        The final energy of the optimized protein configuration.
-    
-    trajectory : list of np.ndarray
-        A list of intermediate configurations during the optimization.
-    """
-    # Helper function to compute pairwise distances
-    def compute_pairwise_distances(positions):
-        n = positions.shape[0]
-        dist_matrix = np.zeros((n, n), dtype=np.float64)
-        for i in range(n):
-            for j in range(i + 1, n):
-                dist = np.linalg.norm(positions[i] - positions[j])
-                dist_matrix[i, j] = dist
-                dist_matrix[j, i] = dist
-        return dist_matrix
-
-    # Helper function to compute gradient of total energy
-    def compute_gradient(positions, n_beads, epsilon=1.0, sigma=1.0, b=1.0, k_b=100.0):
-        gradient = np.zeros_like(positions)
-        positions = positions.reshape((n_beads, -1))
-        
-        # Bond energy gradient
-        for i in range(n_beads - 1):
-            r_vec = positions[i+1] - positions[i]
+    # Lennard-Jones energy gradient
+    for i in range(n_beads):
+        for j in range(i+1, n_beads):
+            r_vec = positions[j] - positions[i]
             r = np.linalg.norm(r_vec)
-            grad = 2 * k_b * (r - b) * r_vec / r
-            gradient[i] += grad
-            gradient[i+1] -= grad
-        
-        # Lennard-Jones energy gradient
-        for i in range(n_beads):
-            for j in range(i+1, n_beads):
-                r_vec = positions[j] - positions[i]
-                r = np.linalg.norm(r_vec)
-                if r > 1e-2:
-                    grad = 24 * epsilon * (2 * (sigma / r)**12 - (sigma / r)**6) * r_vec / r**2
-                    gradient[i] += grad
-                    gradient[j] -= grad
-        
-        return gradient.flatten()
-
-    # The BFGS optimization process
-    def bfgs_optimization(positions, n_beads, maxiter=1000, tol=1e-6):
-        # Initial setup
-        positions = positions.flatten()
-        trajectory = []
-        gradient = compute_gradient(positions, n_beads)
-        H_inv = np.eye(len(positions))  # Initial inverse Hessian
-        start_time = time.time()  # Initialize start time here to track elapsed time
-
-        # Begin BFGS iterations
-        for iteration in range(maxiter):
-            energy = total_energy(positions, n_beads)
-            trajectory.append(positions.reshape(n_beads, -1))
-            grad = compute_gradient(positions, n_beads)
-            
-            # Convergence check
-            if np.linalg.norm(grad) < tol:
-                print(f"Converged in {iteration} iterations")
-                break
-            
-            # Compute search direction (using the inverse Hessian)
-            search_direction = -np.dot(H_inv, grad)
-            
-            # Line search (simple fixed step size here, can be made more sophisticated)
-            step_size = 1e-3
-            new_positions = positions + step_size * search_direction
-            
-            # Update the inverse Hessian using the BFGS formula
-            delta_x = new_positions - positions
-            delta_grad = compute_gradient(new_positions, n_beads) - grad
-            rho = 1.0 / np.dot(delta_grad, delta_x)
-            H_inv = np.dot(np.eye(len(positions)) - rho * np.outer(delta_x, delta_grad), H_inv)
-            H_inv = np.dot(H_inv, np.eye(len(positions)) - rho * np.outer(delta_grad, delta_x))
-            H_inv += rho * np.outer(delta_x, delta_x)
-            
-            positions = new_positions
-
-            # Time check for large n_beads
-            elapsed_time = time.time() - start_time  # Now this will be defined correctly
-            if elapsed_time > 600:  # Timeout if optimization exceeds 600 seconds
-                print("Optimization exceeded time limit (600 seconds).")
-                break
-
-        return positions, energy, trajectory
+            if r > 1e-2:
+                grad = 24 * epsilon * (2 * (sigma / r)**12 - (sigma / r)**6) * r_vec / r**2
+                gradient[i] += grad
+                gradient[j] -= grad
     
-    # Total energy function
-    def total_energy(positions, n_beads, epsilon=1.0, sigma=1.0, b=1.0, k_b=100.0):
-        positions = positions.reshape((n_beads, -1))
-        energy = 0.0
-        
-        # Bond potential energy
-        for i in range(n_beads - 1):
-            r = np.linalg.norm(positions[i+1] - positions[i])
-            energy += k_b * (r - b)**2
-        
-        # Lennard-Jones potential energy
-        for i in range(n_beads):
-            for j in range(i+1, n_beads):
-                r = np.linalg.norm(positions[i] - positions[j])
-                if r > 1e-2:
-                    energy += 4 * epsilon * ((sigma / r)**12 - (sigma / r)**6)
-        
-        return energy
-    
-    # Run BFGS optimization
-    result_positions, final_energy, trajectory = bfgs_optimization(positions, n_beads, maxiter, tol)
-    
-    # Save final result to CSV if requested
-    if write_csv:
-        np.savetxt(f"optimized_protein_{n_beads}_beads.csv", result_positions.reshape(n_beads, -1), delimiter=",")
-    
-    return result_positions, final_energy, trajectory
+    return gradient.flatten()
 
-# 3D visualization function
+# BFGS optimization process
+def bfgs_optimization(positions, n_beads, maxiter=1000, tol=1e-6):
+    # Initial setup
+    positions = positions.flatten()
+    trajectory = []
+    gradient = compute_gradient(positions, n_beads)
+    H_inv = np.eye(len(positions))  # Initial inverse Hessian
+    start_time = time.time()
+
+    # Begin BFGS iterations
+    for iteration in range(maxiter):
+        energy = total_energy(positions, n_beads)
+        trajectory.append(positions.reshape(n_beads, -1))
+        grad = compute_gradient(positions, n_beads)
+        
+        # Convergence check
+        if np.linalg.norm(grad) < tol:
+            print(f"Converged in {iteration} iterations")
+            break
+        
+        # Compute search direction (using the inverse Hessian)
+        search_direction = -np.dot(H_inv, grad)
+        
+        # Line search (simple fixed step size)
+        step_size = 1e-3
+        new_positions = positions + step_size * search_direction
+        
+        # Update the inverse Hessian using the BFGS formula
+        delta_x = new_positions - positions
+        delta_grad = compute_gradient(new_positions, n_beads) - grad
+        rho = 1.0 / np.dot(delta_grad, delta_x)
+        H_inv = np.dot(np.eye(len(positions)) - rho * np.outer(delta_x, delta_grad), H_inv)
+        H_inv = np.dot(H_inv, np.eye(len(positions)) - rho * np.outer(delta_grad, delta_x))
+        H_inv += rho * np.outer(delta_x, delta_x)
+        
+        positions = new_positions
+
+        # Time check for large n_beads
+        elapsed_time = time.time() - start_time
+        if elapsed_time > 600:  # Timeout if optimization exceeds 600 seconds
+            print("Optimization exceeded time limit (600 seconds).")
+            break
+
+    return positions, energy, trajectory
+
+# Main function to test and visualize
 def plot_protein_3d(positions, title="Protein Conformation", ax=None):
     """
     Plot the 3D positions of the protein.
@@ -269,7 +169,6 @@ def plot_protein_3d(positions, title="Protein Conformation", ax=None):
     ax.set_zlabel('z')
     plt.show()
 
-# Animation function
 # Animation function with autoscaling
 def animate_optimization(trajectory, interval=100):
     """
@@ -311,7 +210,7 @@ if __name__ == "__main__":
     print("Initial Energy:", total_energy(initial_positions.flatten(), n_beads))
     plot_protein_3d(initial_positions, title="Initial Configuration")
 
-    result, trajectory = optimize_protein(initial_positions, n_beads, write_csv = True)
+    result, trajectory = optimize_protein(initial_positions, n_beads, write_csv=True)
 
     optimized_positions = result.x.reshape((n_beads, dimension))
     print("Optimized Energy:", total_energy(optimized_positions.flatten(), n_beads))
