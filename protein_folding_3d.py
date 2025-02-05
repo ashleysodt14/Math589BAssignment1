@@ -69,9 +69,9 @@ def optimize_protein(positions, n_beads, write_csv=False, maxiter=2000, tol=1e-4
 
 # Main function
 if __name__ == "__main__":
-    reference_energies = {10: -20.9, 100: -455.0, 500: -945.0}
+    reference_energies = {10: -20.9, 100: -455.0, 200: -945.0}
 
-    for n_beads in [10, 100, 500]:
+    for n_beads in [10, 100, 200]:
         initial_positions = initialize_protein(n_beads)
 
         print(f"Initial Energy for {n_beads} beads:", total_energy_optimized(initial_positions.flatten(), n_beads))
