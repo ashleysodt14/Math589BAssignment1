@@ -35,7 +35,7 @@ def total_energy_optimized(positions, n_beads, epsilon=1.0, sigma=1.0, b=1.0, k_
     return energy
 
 # Optimization function with fast optimization
-def optimize_protein(positions, n_beads, write_csv=False, maxiter=2000, tol=1e-4):
+def optimize_protein(positions, n_beads, write_csv=False, maxiter=100000, tol=1e-4):
     trajectory = []
     
     # Callback function with correct argument handling
@@ -46,14 +46,20 @@ def optimize_protein(positions, n_beads, write_csv=False, maxiter=2000, tol=1e-4
 
     # Use Trust-Region Optimization (`trust-constr`) for better step control
     result = minimize(
-        fun=total_energy_optimized,
-        x0=positions.flatten(),
-        args=(n_beads,),
-        method='trust-constr',  # Faster than L-BFGS-B for large problems
-        callback=callback,  # ✅ Fix: Now accepts the correct number of arguments
-        tol=tol,
-        options={'maxiter': maxiter, 'disp': True}
-    )
+    fun=total_energy_optimized,
+    x0=positions.flatten(),
+    args=(n_beads,),
+    method='L-BFGS-B',
+    callback=callback,
+    tol=1e-8,
+    options={
+        'maxiter': 100000,  # 🔄 Ensure enough iterations
+        'maxfun': 200000,  # 🔄 Allow more function evaluations
+        'ftol': 1e-10,  # 🔄 Make sure it doesn't stop early due to step size
+        'disp': True
+    }
+)
+
 
     # Save results if trajectory is available
     if trajectory:
