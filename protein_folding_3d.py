@@ -110,8 +110,6 @@ def total_energy(positions, n_beads, epsilon=1.0, sigma=1.0, b=1.0, k_b=100.0):
         np.savetxt(csv_filepath, trajectory[-1], delimiter=",")
 
     return result, trajectory
-import numpy as np
-import time
 
 def optimize_protein(positions, n_beads, write_csv=False, maxiter=1000, tol=1e-6):
     """
