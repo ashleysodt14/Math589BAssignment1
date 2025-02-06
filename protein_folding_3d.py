@@ -55,7 +55,7 @@ def compute_energy_and_gradient(x, num_units, epsilon=1.0, sigma=1.0, b_eq=1.0, 
 # -----------------------------
 # Optimization Routine
 # -----------------------------
-def optimize_protein(initial_coords, num_units, max_iter=10000, tol=1e-4):
+def optimize_protein(initial_coords, num_units, max_iter=10000, tol=1e-4, write_csv=False):
     x0 = initial_coords.flatten()
     args = (num_units,)
     opt_result = minimize(
@@ -66,6 +66,12 @@ def optimize_protein(initial_coords, num_units, max_iter=10000, tol=1e-4):
         jac=True,
         options={'maxiter': max_iter, 'disp': True}
     )
+    
+    if write_csv:
+        csv_filepath = f'protein_{num_units}.csv'
+        np.savetxt(csv_filepath, opt_result.x.reshape((num_units, 3)), delimiter=",")
+        print(f'Data saved to {csv_filepath}')
+    
     return opt_result
 
 # -----------------------------
@@ -102,7 +108,7 @@ if __name__ == "__main__":
     num_units = 100
     init_coords = initialize_chain(num_units)
     visualize_3d(init_coords, title="Initial Configuration")
-    result = optimize_protein(init_coords, num_units)
+    result = optimize_protein(init_coords, num_units, write_csv=True)
     optimized_coords = result.x.reshape((num_units, 3))
     visualize_3d(optimized_coords, title="Optimized Configuration")
     print(result)
