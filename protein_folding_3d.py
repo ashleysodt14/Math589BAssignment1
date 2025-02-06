@@ -57,6 +57,45 @@ def compute_energy_and_gradient(x, num_units, epsilon=1.0, sigma=1.0, b_eq=1.0, 
     return energy, gradients.flatten()
 
 # -----------------------------
+# BFGS with Backtracking
+# -----------------------------
+def bfgs_optimize(func, x0, args, n_beads, maxiter=1000, tol=1e-6, alpha0=1.0, beta=0.5, c=1e-4):
+    x = x0.copy()
+    n = len(x)
+    H = np.eye(n)
+    trajectory = []
+    for k in range(maxiter):
+        f, g = func(x, *args)
+        g_norm = np.linalg.norm(g)
+        if g_norm < tol:
+            print(f"BFGS converged at iteration {k} with gradient norm {g_norm:.8e}")
+            break
+        p = -H.dot(g)
+        alpha = alpha0
+        while True:
+            x_new = x + alpha * p
+            f_new, _ = func(x_new, *args)
+            if f_new <= f + c * alpha * np.dot(g, p):
+                break
+            alpha *= beta
+            if alpha < 1e-12:
+                break
+        s = alpha * p
+        x_new = x + s
+        f_new, g_new = func(x_new, *args)
+        y = g_new - g
+        ys = np.dot(y, s)
+        if ys > 1e-10:
+            rho = 1.0 / ys
+            I = np.eye(n)
+            H = (I - rho * np.outer(s, y)).dot(H).dot(I - rho * np.outer(y, s)) + rho * np.outer(s, s)
+        x = x_new
+        trajectory.append(x.reshape((n_beads, -1)))
+        if (k+1) % 50 == 0:
+            print(f"Iteration {k+1}: f = {f_new:.6f}, ||g|| = {np.linalg.norm(g_new):.2e}")
+    return x, trajectory
+
+# -----------------------------
 # Optimization Routine
 # -----------------------------
 def optimize_protein(initial_coords, num_units, maxiter=10000, tol=1e-4, write_csv=False):
@@ -175,8 +214,11 @@ if __name__ == "__main__":
     else:
         print("Warning: Gradient verification failed.")
     
-    result, trajectory = optimize_protein(init_coords, num_units, write_csv=True)
-    optimized_coords = result.x.reshape((num_units, 3))
+    # Perform optimization using BFGS with backtracking
+    print("Optimizing using custom BFGS with backtracking...")
+    x_opt, traj = bfgs_optimize(compute_energy_and_gradient, x0, (num_units,), num_units, maxiter=1000)
+    
+    # Visualize results
+    optimized_coords = x_opt.reshape((num_units, 3))
     visualize_3d(optimized_coords, title="Optimized Configuration")
-    print(result)
-
+    print("Optimization complete.")
