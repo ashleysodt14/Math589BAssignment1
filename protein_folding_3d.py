@@ -61,7 +61,7 @@ def compute_energy_and_gradient(x, num_units, epsilon=1.0, sigma=1.0, b_eq=1.0, 
     return energy, gradients.flatten()
 
 # -----------------------------
-# Optimization Routine with Improvements
+# Optimization Routine with Fixes
 # -----------------------------
 def optimize_protein(initial_coords, num_units, method="trust-constr", maxiter=10000, tol=1e-9, use_basinhopping=False, write_csv=False):
     x0 = initial_coords.flatten()
@@ -70,7 +70,7 @@ def optimize_protein(initial_coords, num_units, method="trust-constr", maxiter=1
     # Store trajectory for visualization
     trajectory = []
 
-    def callback(xk):
+    def callback(xk, *_):  # Fix to accept additional arguments
         trajectory.append(xk.reshape((num_units, -1)))
 
     if use_basinhopping:
