@@ -58,21 +58,33 @@ def compute_energy_and_gradient(x, num_units, epsilon=1.0, sigma=1.0, b_eq=1.0, 
 def optimize_protein(initial_coords, num_units, maxiter=10000, tol=1e-4, write_csv=False):
     x0 = initial_coords.flatten()
     args = (num_units,)
+    
+    # Store trajectory for visualization
+    trajectory = []
+    
+    def callback(xk):
+        # Save intermediate positions to the trajectory
+        trajectory.append(xk.reshape((num_units, -1)))
+
+    # Perform optimization
     opt_result = minimize(
         compute_energy_and_gradient,
         x0,
         args=args,
         method='BFGS',
         jac=True,
+        callback=callback,
         options={'maxiter': maxiter, 'disp': True}
     )
     
+    # Save results to CSV if required
     if write_csv:
         csv_filepath = f'protein_{num_units}.csv'
         np.savetxt(csv_filepath, opt_result.x.reshape((num_units, 3)), delimiter=",")
         print(f'Data saved to {csv_filepath}')
     
-    return opt_result
+    # Return both the optimization result and trajectory
+    return opt_result, trajectory
 
 # -----------------------------
 # Visualization Functions
