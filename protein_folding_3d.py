@@ -76,10 +76,14 @@ def optimize_protein(initial_coords, num_units, maxiter=10000, tol=1e-4, write_c
         options={'maxiter': maxiter, 'disp': True}
     )
 
-    # Adjust optimization if gradient norm is above tolerance or energy exceeds reference
+    # Check convergence based on gradient norm and energy thresholds
     grad_norm = np.linalg.norm(opt_result.jac)
+    if grad_norm > tol:
+        print(f"Warning: Gradient norm = {grad_norm:.8e} above tolerance {tol:.8e}")
+    if ref_energy is not None and opt_result.fun > ref_energy:
+        print(f"Warning: Energy = {opt_result.fun:.8f} above reference energy {ref_energy:.8f}")
+
     if grad_norm > tol or (ref_energy is not None and opt_result.fun > ref_energy):
-        print(f"Warning: Optimization not fully converged. Gradient norm = {grad_norm:.8e}, Energy = {opt_result.fun:.8f}")
         print("Retrying optimization with increased maxiter.")
         opt_result = minimize(
             compute_energy_and_gradient,
@@ -135,7 +139,7 @@ if __name__ == "__main__":
     ref_energy_10 = -20.9
     ref_energy_100 = -455.0
     ref_energy_200 = -945.0
-    result_10, _ = optimize_protein(init_coords[:10], 10, maxiter=1000, tol=1e-6, write_csv=False, ref_energy=ref_energy_10)
-    result_100, _ = optimize_protein(init_coords[:100], 100, maxiter=3000, tol=1e-4, write_csv=False, ref_energy=ref_energy_100)
+    result_10, _ = optimize_protein(init_coords[:10], 10, maxiter=2000, tol=1e-6, write_csv=False, ref_energy=ref_energy_10)
+    result_100, _ = optimize_protein(init_coords[:100], 100, maxiter=4000, tol=1e-4, write_csv=False, ref_energy=ref_energy_100)
     result_200, _ = optimize_protein(init_coords, 200, maxiter=10000, tol=0.0005, write_csv=True, ref_energy=ref_energy_200)
     visualize_3d(result_200.x.reshape((200, 3)), title="Optimized Configuration")
