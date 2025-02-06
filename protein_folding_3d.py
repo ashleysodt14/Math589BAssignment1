@@ -52,6 +52,84 @@ def compute_energy_and_gradient(x, num_units, epsilon=1.0, sigma=1.0, b_eq=1.0, 
     np.add.at(gradients, upper_indices[1][valid_indices], -force_contributions)
     return energy, gradients.flatten()
 
+def bfgs_optimization(objective_function, initial_x, function_args, num_beads, max_iterations=1000, tolerance=1e-6, step_size=1.0, decay_factor=0.5, Wolfe_c1=1e-4):
+    """ 
+    Implements the BFGS optimization algorithm for minimizing the objective function.
+
+    Parameters:
+    - objective_function: The function to minimize, returning both value and gradient.
+    - initial_x: Initial guess for the parameters.
+    - function_args: Additional arguments passed to the objective function.
+    - num_beads: Number of elements in the polymer chain.
+    - max_iterations: Maximum number of iterations.
+    - tolerance: Convergence criterion for the gradient norm.
+    - step_size: Initial step size for the line search.
+    - decay_factor: Reduction factor for step size in backtracking.
+    - Wolfe_c1: Wolfe condition parameter for sufficient decrease.
+
+    Returns:
+    - optimized_x: The optimized parameter values.
+    - history: List of parameter values at each iteration.
+    """
+
+    # Initialization
+    optimized_x = initial_x.copy()
+    dim = len(optimized_x)
+    inverse_Hessian = np.eye(dim)  # Approximated Hessian inverse
+    history = []
+
+    for iteration in range(max_iterations):
+        # Evaluate function value and gradient
+        function_value, gradient = objective_function(optimized_x, *function_args)
+        gradient_norm = np.linalg.norm(gradient)
+
+        # Check for convergence
+        if gradient_norm < tolerance:
+            print(f"Converged at iteration {iteration}, gradient norm: {gradient_norm:.8e}")
+            break
+
+        # Compute search direction
+        search_direction = -inverse_Hessian.dot(gradient)
+
+        # Line search using backtracking
+        step_length = step_size
+        while True:
+            new_x = optimized_x + step_length * search_direction
+            new_function_value, _ = objective_function(new_x, *function_args)
+
+            if new_function_value <= function_value + Wolfe_c1 * step_length * np.dot(gradient, search_direction):
+                break
+            step_length *= decay_factor
+
+            # Avoid infinitesimally small step sizes
+            if step_length < 1e-12:
+                break
+
+        # Update step and position
+        step = step_length * search_direction
+        optimized_x += step
+        new_function_value, new_gradient = objective_function(optimized_x, *function_args)
+
+        # BFGS Hessian update
+        gradient_difference = new_gradient - gradient
+        step_dot_gradient = np.dot(gradient_difference, step)
+
+        if step_dot_gradient > 1e-10:
+            scaling_factor = 1.0 / step_dot_gradient
+            identity_matrix = np.eye(dim)
+            term1 = identity_matrix - scaling_factor * np.outer(step, gradient_difference)
+            term2 = identity_matrix - scaling_factor * np.outer(gradient_difference, step)
+            inverse_Hessian = term1.dot(inverse_Hessian).dot(term2) + scaling_factor * np.outer(step, step)
+
+        # Store trajectory for visualization
+        history.append(optimized_x.reshape((num_beads, -1)))
+
+        # Logging
+        if (iteration + 1) % 50 == 0:
+            print(f"Iteration {iteration + 1}: Function Value = {new_function_value:.6f}, ||Gradient|| = {np.linalg.norm(new_gradient):.2e}")
+
+    return optimized_x, history
+
 # -----------------------------
 # Optimization Routine
 # -----------------------------
