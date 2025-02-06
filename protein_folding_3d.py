@@ -4,12 +4,12 @@ from scipy.optimize import minimize, basinhopping
 from matplotlib.animation import FuncAnimation
 
 # -----------------------------
-# Initialize Polymer Chain with Random Perturbations
+# Initialize Polymer Chain with Better Random Perturbations
 # -----------------------------
-def initialize_chain(num_units, dims=3, perturb=0.1):
+def initialize_chain(num_units, dims=3, perturb=0.2):
     coords = np.zeros((num_units, dims))
     for idx in range(1, num_units):
-        coords[idx, 0] = coords[idx - 1, 0] + 1  # Keep the backbone structure
+        coords[idx, 0] = coords[idx - 1, 0] + 1  # Keep backbone structure
         coords[idx, 1:] += perturb * (np.random.rand(dims - 1) - 0.5)  # Random small perturbations
     return coords
 
@@ -57,9 +57,9 @@ def compute_energy_and_gradient(x, num_units, epsilon=1.0, sigma=1.0, b_eq=1.0, 
     return energy, gradients.flatten()
 
 # -----------------------------
-# Optimization Routine (BFGS and L-BFGS-B with Simulated Annealing)
+# Optimization Routine
 # -----------------------------
-def optimize_protein(initial_coords, num_units, method="BFGS", maxiter=20000, tol=1e-7, use_basinhopping=False, write_csv=False):
+def optimize_protein(initial_coords, num_units, method="L-BFGS-B", maxiter=5000, tol=1e-8, use_basinhopping=False, write_csv=False):
     x0 = initial_coords.flatten()
     args = (num_units,)
     
@@ -70,7 +70,6 @@ def optimize_protein(initial_coords, num_units, method="BFGS", maxiter=20000, to
         trajectory.append(xk.reshape((num_units, -1)))
 
     if use_basinhopping:
-        # Use global optimization (Simulated Annealing-like approach)
         minimizer_kwargs = {
             "method": method,
             "jac": True,
@@ -78,10 +77,9 @@ def optimize_protein(initial_coords, num_units, method="BFGS", maxiter=20000, to
             "options": {'maxiter': maxiter, 'disp': True, 'gtol': tol}
         }
         opt_result = basinhopping(
-            compute_energy_and_gradient, x0, minimizer_kwargs=minimizer_kwargs, niter=100
+            compute_energy_and_gradient, x0, minimizer_kwargs=minimizer_kwargs, niter=200
         )
     else:
-        # Perform optimization
         opt_result = minimize(
             compute_energy_and_gradient,
             x0,
@@ -92,6 +90,16 @@ def optimize_protein(initial_coords, num_units, method="BFGS", maxiter=20000, to
             options={'maxiter': maxiter, 'disp': True, 'gtol': tol}
         )
     
+    # Final refinement step
+    opt_result = minimize(
+        compute_energy_and_gradient,
+        opt_result.x,
+        args=args,
+        method="CG",  # Conjugate Gradient to refine gradients
+        jac=True,
+        options={'maxiter': 500, 'tol': 1e-9}
+    )
+
     if write_csv:
         csv_filepath = f'protein_{num_units}.csv'
         np.savetxt(csv_filepath, opt_result.x.reshape((num_units, 3)), delimiter=",")
@@ -100,54 +108,20 @@ def optimize_protein(initial_coords, num_units, method="BFGS", maxiter=20000, to
     return opt_result, trajectory
 
 # -----------------------------
-# Visualization Functions
-# -----------------------------
-def visualize_3d(coords, title="Chain Structure"):
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    coords = coords.reshape((-1, 3))
-    ax.plot(coords[:, 0], coords[:, 1], coords[:, 2], '-o')
-    ax.set_title(title)
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
-    plt.show()
-
-def animate_chain_evolution(trajectory, interval=100):
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    line, = ax.plot([], [], [], '-o')
-
-    def update(frame):
-        coords = trajectory[frame]
-        line.set_data(coords[:, 0], coords[:, 1])
-        line.set_3d_properties(coords[:, 2])
-        ax.set_title(f"Step {frame + 1}/{len(trajectory)}")
-        return line,
-
-    anim = FuncAnimation(fig, update, frames=len(trajectory), interval=interval, blit=False)
-    plt.show()
-
-# -----------------------------
 # Main Execution
 # -----------------------------
 if __name__ == "__main__":
     num_units = 100  # Can adjust to 10, 100, or 200 for testing
     init_coords = initialize_chain(num_units)
 
-    # Visualize the initial state
-    visualize_3d(init_coords, title="Initial Configuration")
+    # Use Simulated Annealing for 100 particles
+    use_basinhopping = num_units == 100
 
-    # Run optimization with improved settings
+    # Run optimization
     result, trajectory = optimize_protein(
-        init_coords, num_units, method="L-BFGS-B", maxiter=20000, tol=1e-7, use_basinhopping=True, write_csv=True
+        init_coords, num_units, method="L-BFGS-B", maxiter=5000, tol=1e-8, use_basinhopping=use_basinhopping, write_csv=True
     )
 
-    # Visualize optimized state
+    # Check results
     optimized_coords = result.x.reshape((num_units, 3))
-    visualize_3d(optimized_coords, title="Optimized Configuration")
-
-    # Animate chain evolution
-    animate_chain_evolution(trajectory)
-
     print(result)
