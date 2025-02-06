@@ -101,7 +101,7 @@ def optimize_protein(initial_coords, num_units, method="trust-constr", maxiter=1
         args=args,
         method="trust-constr",  # Enforce constraints better
         jac=True,
-        options={'maxiter': 500, 'tol': 1e-10}
+        options={'maxiter': 500, 'xtol': 1e-10}
     )
 
     if write_csv:
