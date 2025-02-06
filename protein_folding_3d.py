@@ -84,6 +84,39 @@ def optimize_protein(initial_coords, num_units, maxiter=10000, tol=1e-4, write_c
     
     return opt_result, trajectory
 
+
+def verify_gradient(func, x, num_units, epsilon=1.0, sigma=1.0, b_eq=1.0, k_bond=100.0, h=1e-5):
+    """
+    Verify gradients using the central difference formula.
+    
+    Parameters:
+    - func: Function to compute energy and analytic gradient
+    - x: Current flattened positions
+    - num_units: Number of units in the chain
+    - epsilon, sigma, b_eq, k_bond: Potential parameters
+    - h: Step size for finite difference
+    """
+    analytic_energy, analytic_grad = func(x, num_units, epsilon, sigma, b_eq, k_bond)
+    finite_diff_grad = np.zeros_like(x)
+    
+    for i in range(len(x)):
+        x_forward = x.copy()
+        x_backward = x.copy()
+        x_forward[i] += h
+        x_backward[i] -= h
+        
+        f_forward, _ = func(x_forward, num_units, epsilon, sigma, b_eq, k_bond)
+        f_backward, _ = func(x_backward, num_units, epsilon, sigma, b_eq, k_bond)
+        
+        finite_diff_grad[i] = (f_forward - f_backward) / (2 * h)
+    
+    # Compute the error
+    diff = np.linalg.norm(analytic_grad - finite_diff_grad)
+    print(f"Gradient verification: ||analytic_grad - finite_diff_grad|| = {diff:.8e}")
+    
+    return diff
+
+
 # -----------------------------
 # Visualization Functions
 # -----------------------------
@@ -120,7 +153,30 @@ if __name__ == "__main__":
     num_units = 100
     init_coords = initialize_chain(num_units)
     visualize_3d(init_coords, title="Initial Configuration")
+    
+    # Flatten the initial positions
+    x0 = init_coords.flatten()
+    
+    # Verify the gradient
+    print("Verifying gradients...")
+    grad_diff = verify_gradient(
+        compute_energy_and_gradient,
+        x0,
+        num_units,
+        epsilon=1.0,
+        sigma=1.0,
+        b_eq=1.0,
+        k_bond=100.0,
+        h=1e-5
+    )
+    
+    if grad_diff < 1e-6:
+        print("Gradient verification passed!")
+    else:
+        print("Warning: Gradient verification failed.")
+    
     result, trajectory = optimize_protein(init_coords, num_units, write_csv=True)
     optimized_coords = result.x.reshape((num_units, 3))
     visualize_3d(optimized_coords, title="Optimized Configuration")
     print(result)
+
