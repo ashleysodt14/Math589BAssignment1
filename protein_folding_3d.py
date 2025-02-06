@@ -63,7 +63,7 @@ def compute_energy_and_gradient(x, num_units, epsilon=1.0, sigma=1.0, b_eq=1.0, 
 # -----------------------------
 # Optimization Routine with Fixes
 # -----------------------------
-def optimize_protein(initial_coords, num_units, method="trust-constr", maxiter=10000, tol=1e-9, use_basinhopping=False, write_csv=False):
+def optimize_protein(initial_coords, num_units, method="L-BFGS-B", maxiter=10000, tol=1e-9, use_basinhopping=False, write_csv=False):
     x0 = initial_coords.flatten()
     args = (num_units,)
     
@@ -99,9 +99,9 @@ def optimize_protein(initial_coords, num_units, method="trust-constr", maxiter=1
         compute_energy_and_gradient,
         opt_result.x,
         args=args,
-        method="trust-constr",  # Enforce constraints better
+        method="CG",  # Conjugate Gradient refinement
         jac=True,
-        options={'maxiter': 500, 'xtol': 1e-10}
+        options={'maxiter': 500, 'gtol': 1e-10}
     )
 
     if write_csv:
@@ -123,7 +123,7 @@ if __name__ == "__main__":
 
     # Run optimization
     result, trajectory = optimize_protein(
-        init_coords, num_units, method="trust-constr", maxiter=10000, tol=1e-9, use_basinhopping=use_basinhopping, write_csv=True
+        init_coords, num_units, method="L-BFGS-B", maxiter=10000, tol=1e-9, use_basinhopping=use_basinhopping, write_csv=True
     )
 
     # Check results
