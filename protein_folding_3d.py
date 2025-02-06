@@ -59,11 +59,14 @@ def optimize_protein(initial_coords, num_units, maxiter=10000, tol=1e-4, write_c
     x0 = initial_coords.flatten()
     args = (num_units,)
     
-    # Store trajectory for visualization
     trajectory = []
     
     def callback(xk):
         trajectory.append(xk.reshape((num_units, -1)))
+    
+    # Increase max iterations adaptively
+    initial_maxiter = maxiter
+    retry_factor = 2  # Factor to increase maxiter upon failure
     
     # Perform optimization
     opt_result = minimize(
@@ -76,15 +79,16 @@ def optimize_protein(initial_coords, num_units, maxiter=10000, tol=1e-4, write_c
         options={'maxiter': maxiter, 'disp': True}
     )
 
-    # Check convergence based on gradient norm and energy thresholds
+    # Check convergence
     grad_norm = np.linalg.norm(opt_result.jac)
-    if grad_norm > tol:
-        print(f"Warning: Gradient norm = {grad_norm:.8e} above tolerance {tol:.8e}")
-    if ref_energy is not None and opt_result.fun > ref_energy:
-        print(f"Warning: Energy = {opt_result.fun:.8f} above reference energy {ref_energy:.8f}")
+    energy = opt_result.fun
+    
+    failed_grad_check = grad_norm > tol
+    failed_energy_check = ref_energy is not None and energy > ref_energy
 
-    if grad_norm > tol or (ref_energy is not None and opt_result.fun > ref_energy):
-        print("Retrying optimization with increased maxiter.")
+    if failed_grad_check or failed_energy_check:
+        print(f"Warning: Optimization did not fully converge. Retrying with increased maxiter ({maxiter * retry_factor}).")
+        
         opt_result = minimize(
             compute_energy_and_gradient,
             x0,
@@ -92,8 +96,17 @@ def optimize_protein(initial_coords, num_units, maxiter=10000, tol=1e-4, write_c
             method='BFGS',
             jac=True,
             callback=callback,
-            options={'maxiter': maxiter * 2, 'disp': True}
+            options={'maxiter': maxiter * retry_factor, 'disp': True}
         )
+        
+        grad_norm = np.linalg.norm(opt_result.jac)
+        energy = opt_result.fun
+
+    # Final check
+    if grad_norm > tol:
+        print(f"Final Warning: Gradient norm {grad_norm:.8e} still above tolerance {tol:.8e}.")
+    if ref_energy is not None and energy > ref_energy:
+        print(f"Final Warning: Energy {energy:.8f} above reference energy {ref_energy:.8f}.")
 
     if write_csv:
         csv_filepath = f'protein_{num_units}.csv'
@@ -101,7 +114,6 @@ def optimize_protein(initial_coords, num_units, maxiter=10000, tol=1e-4, write_c
         print(f'Data saved to {csv_filepath}')
 
     return opt_result, trajectory
-
 # -----------------------------
 # Visualization Functions
 # -----------------------------
