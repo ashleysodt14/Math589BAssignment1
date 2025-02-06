@@ -55,7 +55,7 @@ def compute_energy_and_gradient(x, num_units, epsilon=1.0, sigma=1.0, b_eq=1.0, 
 # -----------------------------
 # Optimization Routine
 # -----------------------------
-def optimize_protein(initial_coords, num_units, maxiter=10000, tol=1e-4, write_csv=False, ref_energy=None):
+def optimize_protein(initial_coords, num_units, maxiter=10000, tol=1e-6, write_csv=False, ref_energy=None):
     x0 = initial_coords.flatten()
     args = (num_units,)
     
@@ -64,19 +64,15 @@ def optimize_protein(initial_coords, num_units, maxiter=10000, tol=1e-4, write_c
     def callback(xk):
         trajectory.append(xk.reshape((num_units, -1)))
     
-    # Increase max iterations adaptively
-    initial_maxiter = maxiter
-    retry_factor = 2  # Factor to increase maxiter upon failure
-    
-    # Perform optimization
+    # Use L-BFGS-B instead of BFGS for better stability in large-scale problems
     opt_result = minimize(
         compute_energy_and_gradient,
         x0,
         args=args,
-        method='BFGS',
+        method='L-BFGS-B',
         jac=True,
         callback=callback,
-        options={'maxiter': maxiter, 'disp': True}
+        options={'maxiter': maxiter, 'disp': True, 'gtol': tol}
     )
 
     # Check convergence
@@ -87,16 +83,16 @@ def optimize_protein(initial_coords, num_units, maxiter=10000, tol=1e-4, write_c
     failed_energy_check = ref_energy is not None and energy > ref_energy
 
     if failed_grad_check or failed_energy_check:
-        print(f"Warning: Optimization did not fully converge. Retrying with increased maxiter ({maxiter * retry_factor}).")
+        print(f"Warning: Optimization did not fully converge. Retrying with increased maxiter ({maxiter * 2}).")
         
         opt_result = minimize(
             compute_energy_and_gradient,
             x0,
             args=args,
-            method='BFGS',
+            method='L-BFGS-B',
             jac=True,
             callback=callback,
-            options={'maxiter': maxiter * retry_factor, 'disp': True}
+            options={'maxiter': maxiter * 2, 'disp': True, 'gtol': tol}
         )
         
         grad_norm = np.linalg.norm(opt_result.jac)
