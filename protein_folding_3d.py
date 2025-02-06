@@ -25,9 +25,10 @@ def bond_potential(dist, equilibrium=1.0, strength=100.0):
 
 def compute_energy_and_gradient(x, num_units, epsilon=1.0, sigma=1.0, b_eq=1.0, k_bond=100.0):
     coords = x.reshape((num_units, -1))
-    dims = coords.shape[1]
     energy = 0.0
     gradients = np.zeros_like(coords)
+    
+    # Compute bond energy and gradient
     for i in range(num_units - 1):
         delta = coords[i + 1] - coords[i]
         dist = np.linalg.norm(delta)
@@ -38,6 +39,8 @@ def compute_energy_and_gradient(x, num_units, epsilon=1.0, sigma=1.0, b_eq=1.0, 
         force_vec = (force_mag / dist) * delta
         gradients[i] -= force_vec
         gradients[i + 1] += force_vec
+    
+    # Compute Lennard-Jones energy and gradient
     diffs = coords[:, None, :] - coords[None, :, :]
     distances = np.linalg.norm(diffs, axis=2)
     upper_indices = np.triu_indices(num_units, k=1)
@@ -50,6 +53,7 @@ def compute_energy_and_gradient(x, num_units, epsilon=1.0, sigma=1.0, b_eq=1.0, 
     force_contributions = (lj_forces[:, None] / dist_vals[valid_indices, None]) * delta_vectors[valid_indices]
     np.add.at(gradients, upper_indices[0][valid_indices], force_contributions)
     np.add.at(gradients, upper_indices[1][valid_indices], -force_contributions)
+    
     return energy, gradients.flatten()
 
 # -----------------------------
@@ -58,15 +62,11 @@ def compute_energy_and_gradient(x, num_units, epsilon=1.0, sigma=1.0, b_eq=1.0, 
 def optimize_protein(initial_coords, num_units, maxiter=10000, tol=1e-4, write_csv=False):
     x0 = initial_coords.flatten()
     args = (num_units,)
-    
-    # Store trajectory for visualization
     trajectory = []
     
     def callback(xk):
-        # Save intermediate positions to the trajectory
         trajectory.append(xk.reshape((num_units, -1)))
 
-    # Perform optimization
     opt_result = minimize(
         compute_energy_and_gradient,
         x0,
@@ -77,13 +77,11 @@ def optimize_protein(initial_coords, num_units, maxiter=10000, tol=1e-4, write_c
         options={'maxiter': maxiter, 'disp': True}
     )
     
-    # Save results to CSV if required
     if write_csv:
         csv_filepath = f'protein_{num_units}.csv'
         np.savetxt(csv_filepath, opt_result.x.reshape((num_units, 3)), delimiter=",")
         print(f'Data saved to {csv_filepath}')
     
-    # Return both the optimization result and trajectory
     return opt_result, trajectory
 
 # -----------------------------
@@ -104,12 +102,14 @@ def animate_chain_evolution(trajectory, interval=100):
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
     line, = ax.plot([], [], [], '-o')
+    
     def update(frame):
         coords = trajectory[frame]
         line.set_data(coords[:, 0], coords[:, 1])
         line.set_3d_properties(coords[:, 2])
         ax.set_title(f"Step {frame + 1}/{len(trajectory)}")
         return line,
+    
     anim = FuncAnimation(fig, update, frames=len(trajectory), interval=interval, blit=False)
     plt.show()
 
@@ -120,7 +120,7 @@ if __name__ == "__main__":
     num_units = 100
     init_coords = initialize_chain(num_units)
     visualize_3d(init_coords, title="Initial Configuration")
-    result = optimize_protein(init_coords, num_units, write_csv=True)
+    result, trajectory = optimize_protein(init_coords, num_units, write_csv=True)
     optimized_coords = result.x.reshape((num_units, 3))
     visualize_3d(optimized_coords, title="Optimized Configuration")
     print(result)
