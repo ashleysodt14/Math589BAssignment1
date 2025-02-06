@@ -14,15 +14,17 @@ def initialize_chain(num_units, dims=3, perturb=0.2):
     return coords
 
 # -----------------------------
-# Compute Energy Components
+# Compute Energy Components with Refinements
 # -----------------------------
-def lj_potential(dist, epsilon=1.0, sigma=1.0):
+def lj_potential(dist, epsilon=1.0, sigma=1.0, cutoff=2.5):
+    if dist >= cutoff:
+        return 0
     return 4 * epsilon * ((sigma / dist) ** 12 - (sigma / dist) ** 6)
 
-def bond_potential(dist, equilibrium=1.0, strength=100.0):
+def bond_potential(dist, equilibrium=1.0, strength=200.0):
     return strength * (dist - equilibrium) ** 2
 
-def compute_energy_and_gradient(x, num_units, epsilon=1.0, sigma=1.0, b_eq=1.0, k_bond=100.0):
+def compute_energy_and_gradient(x, num_units, epsilon=1.0, sigma=1.0, b_eq=1.0, k_bond=200.0):
     coords = x.reshape((num_units, -1))
     dims = coords.shape[1]
     energy = 0.0
@@ -40,14 +42,16 @@ def compute_energy_and_gradient(x, num_units, epsilon=1.0, sigma=1.0, b_eq=1.0, 
         gradients[i] -= force_vec
         gradients[i + 1] += force_vec
 
-    # Lennard-Jones interactions
+    # Lennard-Jones interactions with cutoff
     diffs = coords[:, None, :] - coords[None, :, :]
     distances = np.linalg.norm(diffs, axis=2)
     upper_indices = np.triu_indices(num_units, k=1)
     dist_vals = distances[upper_indices]
     valid_indices = dist_vals >= 1e-2
-    lj_vals = lj_potential(dist_vals[valid_indices], epsilon, sigma)
+    
+    lj_vals = np.array([lj_potential(d, epsilon, sigma) for d in dist_vals[valid_indices]])
     energy += np.sum(lj_vals)
+    
     lj_forces = 4 * epsilon * (-12 * sigma**12 / dist_vals[valid_indices]**13 + 6 * sigma**6 / dist_vals[valid_indices]**7)
     delta_vectors = diffs[upper_indices]
     force_contributions = (lj_forces[:, None] / dist_vals[valid_indices, None]) * delta_vectors[valid_indices]
@@ -57,9 +61,9 @@ def compute_energy_and_gradient(x, num_units, epsilon=1.0, sigma=1.0, b_eq=1.0, 
     return energy, gradients.flatten()
 
 # -----------------------------
-# Optimization Routine
+# Optimization Routine with Improvements
 # -----------------------------
-def optimize_protein(initial_coords, num_units, method="L-BFGS-B", maxiter=5000, tol=1e-8, use_basinhopping=False, write_csv=False):
+def optimize_protein(initial_coords, num_units, method="trust-constr", maxiter=10000, tol=1e-9, use_basinhopping=False, write_csv=False):
     x0 = initial_coords.flatten()
     args = (num_units,)
     
@@ -77,7 +81,7 @@ def optimize_protein(initial_coords, num_units, method="L-BFGS-B", maxiter=5000,
             "options": {'maxiter': maxiter, 'disp': True, 'gtol': tol}
         }
         opt_result = basinhopping(
-            compute_energy_and_gradient, x0, minimizer_kwargs=minimizer_kwargs, niter=200
+            compute_energy_and_gradient, x0, minimizer_kwargs=minimizer_kwargs, niter=300
         )
     else:
         opt_result = minimize(
@@ -90,14 +94,14 @@ def optimize_protein(initial_coords, num_units, method="L-BFGS-B", maxiter=5000,
             options={'maxiter': maxiter, 'disp': True, 'gtol': tol}
         )
     
-    # Final refinement step
+    # Final refinement step using a robust solver
     opt_result = minimize(
         compute_energy_and_gradient,
         opt_result.x,
         args=args,
-        method="CG",  # Conjugate Gradient to refine gradients
+        method="trust-constr",  # Enforce constraints better
         jac=True,
-        options={'maxiter': 500, 'tol': 1e-9}
+        options={'maxiter': 500, 'tol': 1e-10}
     )
 
     if write_csv:
@@ -119,7 +123,7 @@ if __name__ == "__main__":
 
     # Run optimization
     result, trajectory = optimize_protein(
-        init_coords, num_units, method="L-BFGS-B", maxiter=5000, tol=1e-8, use_basinhopping=use_basinhopping, write_csv=True
+        init_coords, num_units, method="trust-constr", maxiter=10000, tol=1e-9, use_basinhopping=use_basinhopping, write_csv=True
     )
 
     # Check results
