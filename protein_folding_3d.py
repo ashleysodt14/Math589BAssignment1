@@ -76,9 +76,11 @@ def optimize_protein(initial_coords, num_units, maxiter=10000, tol=1e-4, write_c
         options={'maxiter': maxiter, 'disp': True}
     )
 
-    # Adjust optimization based on reference energy and tolerance
-    if ref_energy is not None and opt_result.fun > ref_energy:
-        print(f"Warning: Energy {opt_result.fun} above reference energy {ref_energy}. Trying higher maxiter.")
+    # Adjust optimization if gradient norm is above tolerance or energy exceeds reference
+    grad_norm = np.linalg.norm(opt_result.jac)
+    if grad_norm > tol or (ref_energy is not None and opt_result.fun > ref_energy):
+        print(f"Warning: Optimization not fully converged. Gradient norm = {grad_norm:.8e}, Energy = {opt_result.fun:.8f}")
+        print("Retrying optimization with increased maxiter.")
         opt_result = minimize(
             compute_energy_and_gradient,
             x0,
