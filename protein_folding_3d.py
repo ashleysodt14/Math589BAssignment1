@@ -55,7 +55,7 @@ def compute_energy_and_gradient(x, num_units, epsilon=1.0, sigma=1.0, b_eq=1.0, 
 # -----------------------------
 # Optimization Routine
 # -----------------------------
-def optimize_protein(initial_coords, num_units, max_iter=10000, tol=1e-4, write_csv=False):
+def optimize_protein(initial_coords, num_units, maxiter=10000, tol=1e-4, write_csv=False):
     x0 = initial_coords.flatten()
     args = (num_units,)
     opt_result = minimize(
@@ -64,7 +64,7 @@ def optimize_protein(initial_coords, num_units, max_iter=10000, tol=1e-4, write_
         args=args,
         method='BFGS',
         jac=True,
-        options={'maxiter': max_iter, 'disp': True}
+        options={'maxiter': maxiter, 'disp': True}
     )
     
     if write_csv:
