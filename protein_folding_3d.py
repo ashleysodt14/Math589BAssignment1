@@ -55,7 +55,7 @@ def compute_energy_and_gradient(x, num_units, epsilon=1.0, sigma=1.0, b_eq=1.0, 
 # -----------------------------
 # Optimization Routine
 # -----------------------------
-def optimize_protein(initial_coords, num_units, maxiter=10000, tol=1e-4, write_csv=False):
+def optimize_protein(initial_coords, num_units, maxiter=10000, tol=1e-4, write_csv=False, ref_energy=None):
     x0 = initial_coords.flatten()
     args = (num_units,)
     
@@ -63,9 +63,8 @@ def optimize_protein(initial_coords, num_units, maxiter=10000, tol=1e-4, write_c
     trajectory = []
     
     def callback(xk):
-        # Save intermediate positions to the trajectory
         trajectory.append(xk.reshape((num_units, -1)))
-
+    
     # Perform optimization
     opt_result = minimize(
         compute_energy_and_gradient,
@@ -76,14 +75,25 @@ def optimize_protein(initial_coords, num_units, maxiter=10000, tol=1e-4, write_c
         callback=callback,
         options={'maxiter': maxiter, 'disp': True}
     )
-    
-    # Save results to CSV if required
+
+    # Adjust optimization based on reference energy and tolerance
+    if ref_energy is not None and opt_result.fun > ref_energy:
+        print(f"Warning: Energy {opt_result.fun} above reference energy {ref_energy}. Trying higher maxiter.")
+        opt_result = minimize(
+            compute_energy_and_gradient,
+            x0,
+            args=args,
+            method='BFGS',
+            jac=True,
+            callback=callback,
+            options={'maxiter': maxiter * 2, 'disp': True}
+        )
+
     if write_csv:
         csv_filepath = f'protein_{num_units}.csv'
         np.savetxt(csv_filepath, opt_result.x.reshape((num_units, 3)), delimiter=",")
         print(f'Data saved to {csv_filepath}')
-    
-    # Return both the optimization result and trajectory
+
     return opt_result, trajectory
 
 # -----------------------------
@@ -120,7 +130,10 @@ if __name__ == "__main__":
     num_units = 100
     init_coords = initialize_chain(num_units)
     visualize_3d(init_coords, title="Initial Configuration")
-    result = optimize_protein(init_coords, num_units, write_csv=True)
-    optimized_coords = result.x.reshape((num_units, 3))
-    visualize_3d(optimized_coords, title="Optimized Configuration")
-    print(result)
+    ref_energy_10 = -20.9
+    ref_energy_100 = -455.0
+    ref_energy_200 = -945.0
+    result_10, _ = optimize_protein(init_coords[:10], 10, maxiter=1000, tol=1e-6, write_csv=False, ref_energy=ref_energy_10)
+    result_100, _ = optimize_protein(init_coords[:100], 100, maxiter=3000, tol=1e-4, write_csv=False, ref_energy=ref_energy_100)
+    result_200, _ = optimize_protein(init_coords, 200, maxiter=10000, tol=0.0005, write_csv=True, ref_energy=ref_energy_200)
+    visualize_3d(result_200.x.reshape((200, 3)), title="Optimized Configuration")
