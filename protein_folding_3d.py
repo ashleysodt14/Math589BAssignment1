@@ -90,7 +90,7 @@ def optimize_protein(initial, beads, maxiter=1000, tol=1e-6, write_csv=True):
         np.savetxt(filename, final_structure, delimiter=",")
         print(f"Optimization data saved to {filename}")
     
-    return final_structure, result
+    return result
 
 # -----------------------------
 # Visualization
