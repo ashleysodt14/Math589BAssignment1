@@ -106,15 +106,26 @@ def display_3d_structure(points, title="Protein Configuration"):
 # Main Execution
 # -----------------------------
 if __name__ == "__main__":
-    num_beads = 100
-    start_structure = generate_structure(num_beads)
-    initial_energy, _ = compute_energy_gradient(start_structure.flatten(), num_beads)
-    print(f"Initial Energy: {initial_energy}")
-    display_3d_structure(start_structure, "Starting Configuration")
-    
-    optimization_result = optimize_protein(start_structure, num_beads)
-    optimized_energy, _ = compute_energy_gradient(optimization_result.x.reshape((num_beads, -1)), num_beads)
-    print(f"Optimized Energy: {optimized_energy}")
-    display_3d_structure(optimization_result.x.reshape((num_beads, -1)), "Optimized Configuration")
-    
-    print(optimization_result)
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D
+
+    def plot_protein_3d(positions, title="Protein Conformation", ax=None):
+        positions = positions.reshape((-1, 3))
+        if ax is None:
+            fig = plt.figure()
+            ax = fig.add_subplot(111, projection='3d')
+        ax.plot(positions[:, 0], positions[:, 1], positions[:, 2], '-o', markersize=4)
+        ax.set_title(title)
+        plt.show()
+
+    # Example usage
+    n_beads = 200
+    initial_positions = generate_structure(n_beads)  # Fixed function call
+    E_initial, _ = compute_energy_gradient(initial_positions.flatten(), n_beads)  # Fixed function call
+    print(f"Initial energy: {E_initial:.6f}")
+
+    res = optimize_protein(initial_positions, n_beads, write_csv=False, maxiter=10000, tol=0.5e-3)
+    print(f"Optimization done. #iterations={res.nit}, final E={res.fun:.6f}")
+
+    # Plot final result
+    plot_protein_3d(res.x.reshape((n_beads, -1)), title="Optimized Conformation")  # Fixed reshaping
