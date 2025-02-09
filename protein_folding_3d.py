@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 from mpl_toolkits.mplot3d import Axes3D
-from matplotlib.animation import FuncAnimation
+import csv
 
 # -----------------------------
 # Energy Targeting Function
@@ -70,9 +70,9 @@ def compute_energy_gradient(coords, beads, eps=1.0, sig=1.0, eq=1.0, strength=10
     return total_energy, grad.flatten()
 
 # -----------------------------
-# Optimization with BFGS
+# Optimization with BFGS and CSV Writing
 # -----------------------------
-def optimize_protein(initial, beads, max_iter=1000, tol=1e-6):
+def optimize_protein(initial, beads, max_iter=1000, tol=1e-6, write_csv=True):
     x_init = initial.flatten()
     args = (beads,)
     result = minimize(
@@ -83,7 +83,14 @@ def optimize_protein(initial, beads, max_iter=1000, tol=1e-6):
         jac=True,
         options={'maxiter': max_iter, 'gtol': tol, 'disp': True}
     )
-    return result.x.reshape((beads, -1)), result
+    final_structure = result.x.reshape((beads, -1))
+    
+    if write_csv:
+        filename = f'protein_{beads}.csv'
+        np.savetxt(filename, final_structure, delimiter=",")
+        print(f"Optimization data saved to {filename}")
+    
+    return final_structure, result
 
 # -----------------------------
 # Visualization
