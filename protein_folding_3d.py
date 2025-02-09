@@ -72,7 +72,7 @@ def compute_energy_gradient(coords, beads, eps=1.0, sig=1.0, eq=1.0, strength=10
 # -----------------------------
 # Optimization with BFGS and CSV Writing
 # -----------------------------
-def optimize_protein(initial, beads, max_iter=1000, tol=1e-6, write_csv=True):
+def optimize_protein(initial, beads, tol=1e-6, write_csv=True):
     x_init = initial.flatten()
     args = (beads,)
     result = minimize(
@@ -81,7 +81,7 @@ def optimize_protein(initial, beads, max_iter=1000, tol=1e-6, write_csv=True):
         args=args,
         method='BFGS',
         jac=True,
-        options={'maxiter': max_iter, 'gtol': tol, 'disp': True}
+        options={'gtol': tol, 'disp': True}
     )
     final_structure = result.x.reshape((beads, -1))
     
