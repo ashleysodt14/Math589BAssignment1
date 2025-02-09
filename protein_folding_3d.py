@@ -115,6 +115,6 @@ if __name__ == "__main__":
     optimization_result = optimize_protein(start_structure, num_beads)
     optimized_energy, _ = compute_energy_gradient(optimization_result.x, num_beads)
     print(f"Optimized Energy: {optimized_energy}")
-    display_3d_structure(final_structure, "Optimized Configuration")
+    display_3d_structure(optimization_result.x.reshape((num_beads, -1)), "Optimized Configuration")
     
     print(optimization_result)
