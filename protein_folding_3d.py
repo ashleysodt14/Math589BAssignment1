@@ -2,7 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import minimize
 from mpl_toolkits.mplot3d import Axes3D
-import csv
 
 # -----------------------------
 # Energy Targeting Function
@@ -70,9 +69,9 @@ def compute_energy_gradient(coords, beads, eps=1.0, sig=1.0, eq=1.0, strength=10
     return total_energy, grad.flatten()
 
 # -----------------------------
-# Optimization with BFGS and CSV Writing
+# Optimization with BFGS
 # -----------------------------
-def optimize_protein(initial, beads, maxiter=1000, tol=1e-6, write_csv=True):
+def optimize_protein(initial, beads, maxiter=1000, tol=1e-6):
     x_init = initial.flatten()
     args = (beads,)
     result = minimize(
@@ -83,13 +82,6 @@ def optimize_protein(initial, beads, maxiter=1000, tol=1e-6, write_csv=True):
         jac=True,
         options={'maxiter': maxiter, 'gtol': tol, 'disp': True}
     )
-    final_structure = result.x.reshape((beads, -1))
-    
-    if write_csv:
-        filename = f'protein_{beads}.csv'
-        np.savetxt(filename, final_structure, delimiter=",")
-        print(f"Optimization data saved to {filename}")
-    
     return result
 
 # -----------------------------
@@ -106,32 +98,20 @@ def display_3d_structure(points, title="Protein Configuration"):
 # Main Execution
 # -----------------------------
 if __name__ == "__main__":
-    import matplotlib.pyplot as plt
-    from mpl_toolkits.mplot3d import Axes3D
-
-    def plot_protein_3d(positions, title="Protein Conformation", ax=None):
-        positions = positions.reshape((-1, 3))
-        if ax is None:
-            fig = plt.figure()
-            ax = fig.add_subplot(111, projection='3d')
-        ax.plot(positions[:, 0], positions[:, 1], positions[:, 2], '-o', markersize=4)
-        ax.set_title(title)
-        plt.show()
-
-    # Example usage
     n_beads = 200
     initial_positions = generate_structure(n_beads)
 
-    # Fix: Ensure correct parameter passing and unpacking
-    energy_results = compute_energy_gradient(initial_positions.flatten(), n_beads, eps=1.0, sig=1.0, eq=1.0, strength=100.0)
-    print(f"Initial energy: {energy_results[0]:.6f}")  # Access first value only
-
-    res = optimize_protein(initial_positions, n_beads, write_csv=False, maxiter=10000, tol=0.5e-3)
+    # Compute initial energy
+    initial_energy, _ = compute_energy_gradient(initial_positions.flatten(), n_beads, eps=1.0, sig=1.0, eq=1.0, strength=100.0)
+    print(f"Initial energy: {initial_energy:.6f}")
+    
+    # Optimize structure
+    res = optimize_protein(initial_positions, n_beads, maxiter=10000, tol=0.5e-3)
     print(f"Optimization done. #iterations={res.nit}, final E={res.fun:.6f}")
-
-    # Fix: Ensure correct unpacking for final energy
-    optimized_results = compute_energy_gradient(res.x.reshape((n_beads, -1)), n_beads, eps=1.0, sig=1.0, eq=1.0, strength=100.0)
-    print(f"Optimized Energy: {optimized_results[0]:.6f}")  # Access first value only
-
+    
+    # Compute optimized energy
+    optimized_energy, _ = compute_energy_gradient(res.x.flatten(), n_beads, eps=1.0, sig=1.0, eq=1.0, strength=100.0)
+    print(f"Optimized Energy: {optimized_energy:.6f}")
+    
     # Plot final result
-    plot_protein_3d(res.x.reshape((n_beads, -1)), title="Optimized Conformation")
+    display_3d_structure(res.x.reshape((n_beads, -1)), title="Optimized Conformation")
