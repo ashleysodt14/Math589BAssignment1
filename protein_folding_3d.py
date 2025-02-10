@@ -122,12 +122,16 @@ if __name__ == "__main__":
     n_beads = 200
     initial_positions = generate_structure(n_beads)
 
-    # Fix: Ensure correct parameter passing
-    E_initial, _ = compute_energy_gradient(initial_positions.flatten(), n_beads, eps=1.0, sig=1.0, eq=1.0, strength=100.0)
-    print(f"Initial energy: {E_initial:.6f}")
+    # Fix: Ensure correct parameter passing and unpacking
+    energy_results = compute_energy_gradient(initial_positions.flatten(), n_beads, eps=1.0, sig=1.0, eq=1.0, strength=100.0)
+    print(f"Initial energy: {energy_results[0]:.6f}")  # Access first value only
 
     res = optimize_protein(initial_positions, n_beads, write_csv=False, maxiter=10000, tol=0.5e-3)
     print(f"Optimization done. #iterations={res.nit}, final E={res.fun:.6f}")
+
+    # Fix: Ensure correct unpacking for final energy
+    optimized_results = compute_energy_gradient(res.x.reshape((n_beads, -1)), n_beads, eps=1.0, sig=1.0, eq=1.0, strength=100.0)
+    print(f"Optimized Energy: {optimized_results[0]:.6f}")  # Access first value only
 
     # Plot final result
     plot_protein_3d(res.x.reshape((n_beads, -1)), title="Optimized Conformation")
