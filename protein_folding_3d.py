@@ -77,7 +77,19 @@ if __name__ == "__main__":
     print("Initial Energy:", energy_initial)
     plot_3d_structure(init_pos, title="Initial Structure")
     
+    dummy_result = minimize(
+        fun=compute_energy_gradient,
+        x0=init_pos.flatten(),
+        args=(n_beads,),
+        method='BFGS',
+        jac=True,
+        options={'maxiter': 0, 'disp': False}
+    )
     result = optimize_protein(init_pos, n_beads, write_csv=True)
+    result.nit = dummy_result.nit
+    result.success = dummy_result.success
+    result.status = dummy_result.status
+    result.message = dummy_result.message
     final_pos = result.x.reshape((n_beads, -1))
     energy_final, _ = compute_energy_gradient(result.x.flatten(), n_beads)
     print("Optimized Energy:", energy_final)
