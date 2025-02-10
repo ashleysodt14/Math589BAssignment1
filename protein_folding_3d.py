@@ -73,11 +73,23 @@ def plot_3d_structure(coords, title="Protein Configuration"):
 if __name__ == "__main__":
     n_beads = 100
     init_pos = init_protein(n_beads)
+
+    # Compute initial energy and gradient correctly
     energy_initial, _ = compute_energy_gradient(init_pos.flatten(), n_beads)
     print("Initial Energy:", energy_initial)
+
     plot_3d_structure(init_pos, title="Initial Structure")
     
+    # Optimize protein
     result = optimize_protein(init_pos, n_beads, write_csv=True)
+
+    # Compute final energy ensuring proper unpacking
+    final_energy, _ = compute_energy_gradient(result.x.flatten(), n_beads)
+    print("Optimized Energy:", final_energy)
+
+    final_pos = result.x.reshape((n_beads, -1))
+    plot_3d_structure(final_pos, title="Optimized Structure")
+
     final_pos = result.x.reshape((n_beads, -1))
     energy_final, _ = compute_energy_gradient(result.x, n_beads)
     print("Optimized Energy:", energy_final)
