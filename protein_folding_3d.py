@@ -50,10 +50,16 @@ def compute_energy_gradient(x, n, eps=1.0, sig=1.0, b=1.0, k=100.0):
     
     return energy, grad.flatten()
 
-def optimize_structure(pos, n, maxiter=10000, tol=1e-4):
+def optimize_protein(pos, n, write_csv=False, maxiter=10000, tol=1e-4):
     x0 = pos.flatten()
     args = (n,)
     res = minimize(compute_energy_gradient, x0, args=args, method='BFGS', jac=True, options={'maxiter': maxiter, 'gtol': tol})
+    
+    if write_csv:
+        filename = f'protein_{n}.csv'
+        np.savetxt(filename, res.x.reshape((n, -1)), delimiter=",")
+        print(f"Optimization data saved to {filename}")
+    
     return res
 
 def plot_3d_structure(coords, title="Protein Configuration"):
@@ -71,7 +77,7 @@ if __name__ == "__main__":
     print("Initial Energy:", energy_initial)
     plot_3d_structure(init_pos, title="Initial Structure")
     
-    result = optimize_structure(init_pos, n_beads)
+    result = optimize_protein(init_pos, n_beads, write_csv=True)
     final_pos = result.x.reshape((n_beads, -1))
     energy_final, _ = compute_energy_gradient(result.x, n_beads)
     print("Optimized Energy:", energy_final)
